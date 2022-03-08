@@ -6,8 +6,9 @@ from itertools import islice
 import paho.mqtt.client as mqtt
 
 BROKER_URL = os.environ['MQTT_URL']
-BROKER_PORT = 1883
-CLIENT_ID = "student012"
+BROKER_PORT = os.environ['MQTT_PORT']
+CLIENT_ID = os.environ['CLIENT_ID']
+is_connected = False
 
 def readData(client):
     with open("toyota_data.csv", "r", newline='') as csvfile:
@@ -30,28 +31,46 @@ def readData(client):
                 for i in range (1,46):
 
                     if row[i] != "":
-                        #logging.debug("Signal \t" + signals_list[i] + "\n")
-                        #logging.debug("Value \t " + row[i] + " " + units_list[i] + "\n")
-                        #print("Signal \t" + signals_list[i] + "\n")
-                        #print("Value \t " + row[i] + " " + units_list[i] + "\n")
-                        result = client.publish(topic="toyota/" + signals_list[i], payload=row[i], qos=0, retain=False)
-                        print(result)
+                        client.publish(topic= CLIENT_ID + "/toyota/" + signals_list[i], payload=row[i], qos=0, retain=False)
                         
-                time.sleep(0.001)
-                #time.sleep(delta)
+                time.sleep(delta)
 
                 prev_time = curr_time
 
 def main():
-    #log_level = getattr(logging, loglevel.upper(), None)
-    #logging.basicConfig(level=log_level)
     
     client = mqtt.Client()
-    client.connect(BROKER_URL, BROKER_PORT) 
+    client.tls_set("ca.crt")
+    client.tls_insecure_set(True)
+    client.on_connect = on_connect
+    client.on_publish = on_publish
+    client.connect(BROKER_URL, int(BROKER_PORT))
+    client.loop_start()
+    
+    while is_connected != True:
+        
+        print("Connecting...")
+        time.sleep(5)
     readData(client)
 
- 
+    client.loop_stop()
+    client.disconnect()
+def on_connect(client, userdata, flags, rc):
+    if rc==0:
+        global is_connected
+        is_connected = True
+        print("Connected to broker")
+    else:
+        is_connected = False
+        print("Failed to connected with result " + str(rc))
 
+def on_disconnect(client, userdata, rc):
+    if rc != 0:
+        print("Unexpected disconnection.")
+
+def on_publish(client, userdata, result):
+        print("Msg id published: "+ str(result))
+    
 
 if __name__ == "__main__":
     main()
